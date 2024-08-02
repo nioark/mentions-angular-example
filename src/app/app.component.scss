@@ -1,0 +1,53 @@
+.container {
+    position: relative;
+    overflow-y: visible;
+}
+
+.form {
+    font-size: 16px;
+    font-family: monospace;
+    min-height: 60px;
+    width: 400px;
+    height: 300px;
+}
+
+.highlight {
+    position: relative;
+    box-sizing: border-box;
+    width: 100%; color: transparent;
+    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    border: 1px solid transparent;
+    text-align: start;
+    padding: 9px;
+}
+
+.textarea {
+    display: block;
+    width: 100%;
+    position: absolute;
+    margin: 0px;
+    top: 0px;
+    left: 0px;
+    box-sizing: border-box;
+    background-color: transparent;
+    font-family: inherit;
+    font-size: inherit;
+    letter-spacing: inherit;
+    height: 100%;
+    bottom: 0px;
+    overflow: hidden;
+    resize: none;
+    padding: 9px;
+    border: 1px solid silver;
+}
+
+.page {
+    height: 100vh;
+    height: 100dvh;
+    width: -webkit-fill-available;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
