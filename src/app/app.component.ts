@@ -114,10 +114,12 @@ export class AppComponent {
     }
   }
 
-  enterEvent(event: KeyboardEvent) {
+  onKeydown(event: KeyboardEvent) {
+    console.log(event);
+
     if (!this.on_a_match && !this.possible_match) return 
 
-    if (event.key == "Enter") {
+    if (event.key == "Enter" || event.key == "Space") {
       event.preventDefault();
       
       console.log("Selected match: ", this.possible_match);

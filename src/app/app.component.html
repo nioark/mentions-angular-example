@@ -5,7 +5,7 @@
       <div class="highlight" [innerHTML]="highlights">
 
       </div>
-      <textarea [ngModel]="message" (ngModelChange)="onMessageChange($event)"  class="textarea"></textarea>
+      <textarea [ngModel]="message" (ngModelChange)="onMessageChange($event)" (keyup)="onKeydown($event)"  class="textarea"></textarea>
     </div>
   </div>
 </div>
