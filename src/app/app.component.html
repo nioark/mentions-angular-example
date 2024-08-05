@@ -1,11 +1,41 @@
 
+
+<div class="debug-div">
+  {{this.currentMention?.index}}
+  
+  {{getJson()}}
+</div>
 <div class="page">
+  
   <div class="container">
     <div class="form">
       <div class="highlight" [innerHTML]="highlights">
 
       </div>
-      <textarea [ngModel]="message" (ngModelChange)="onMessageChange($event)" (keyup)="onKeydown($event)"  class="textarea"></textarea>
+      <ng-template
+        cdkConnectedOverlay
+        [cdkConnectedOverlayOrigin]="origin"
+        [cdkConnectedOverlayOpen]="showMatches"
+        [cdkConnectedOverlayPositions]="[
+          {
+              originX: 'center',
+              originY: 'top',
+              overlayX: 'center',
+              overlayY: 'bottom'
+          }
+        ]">
+        <div class="matches">
+          <ng-container *ngFor="let user of currentMatches; index as i">
+            <div class="match" [ngClass]="{ 'selected': selectedMatchIndex === i }">
+              {{user.display}}
+            </div>
+          </ng-container>
+          <ng-container *ngIf="currentMatches.length === 0">
+            Nenhum resultado encontrado
+          </ng-container>
+        </div>
+      </ng-template>
+      <textarea #textarea cdkOverlayOrigin #origin="cdkOverlayOrigin" [ngModel]="message" (ngModelChange)="onChangedMessage($event)" (keydown)="onKeydown($event)"  class="textarea"></textarea>
     </div>
   </div>
 </div>

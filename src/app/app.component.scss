@@ -51,3 +51,40 @@
     align-items: center;
     justify-content: center;
 }
+
+.debug-div {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    translate: -50% 0;
+    height: 200px;
+    width: 650px;
+    display: flex;
+    flex-direction: column;
+}
+
+.matches {
+    width: 394px;
+    height: 100px;
+    background-color: azure;
+    border-top-left-radius: 1rem;
+    border-top-right-radius: 1rem;
+    border: 2px solid black;
+    border-bottom: 0 solid black;
+    display: flex;
+    flex-direction: column;
+    padding-top: 5px;
+    overflow: auto;
+
+}
+
+.match {
+    width: calc(100% - 5px);
+    height: 25px;
+    border-bottom: 1px solid black;
+    padding-left: 5px;
+}
+
+.selected {
+    background-color: beige;
+}
