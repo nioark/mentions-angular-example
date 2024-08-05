@@ -1,5 +1,5 @@
 import { CommonModule } from '@angular/common';
-import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, input, OnInit, ViewChild } from '@angular/core';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { RouterOutlet } from '@angular/router';
@@ -121,23 +121,37 @@ export class AppComponent implements AfterViewInit {
   
     const result: MentionCase[] = [];
 
-    let currentIndex = 0;
-  
     for (let i = 0; i < textParts.length; i++) {
       const textPart = textParts[i];
       const mentionPart = mentionParts[i];
   
       if (textPart) {
-        result.push({ text: textPart, type: "normal", start_index: currentIndex, end_index: currentIndex + textPart.length });
-        currentIndex += textPart.length;
+        result.push({
+          text: textPart,
+          type: "normal",
+          start_index: 0,
+          end_index: 0,
+        });
       }
   
       if (mentionPart) {
-        result.push({ text: mentionPart, type: "mention", start_index: currentIndex, end_index: currentIndex + mentionPart.length });
-        currentIndex += textPart.length;
+        result.push({
+          text: mentionPart,
+          type: "mention",
+          start_index: 0,
+          end_index: 0,
+        });
       }
     }
-
+  
+    let currentIndex = 0;
+  
+    result.map((item) => {
+      item.start_index = currentIndex;
+      item.end_index = currentIndex + item.text.length;
+      currentIndex += item.text.length;
+    })
+    
     return result;
   }
   
