@@ -4,6 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { RouterOutlet } from '@angular/router';
 import {OverlayModule} from '@angular/cdk/overlay';
+import { Change, diffChars } from 'diff';
 
 
 interface User {
@@ -12,20 +13,18 @@ interface User {
 }
 
 interface Mention {
-  user: User | undefined,
+  user: User,
   text: string,
-  index: number,
   str_start_index: number,
   str_end_index: number
 }
 
-interface MentionCase {
+interface ParserCase {
   text: string,
-  type: string,
+  type: "normal" | "parser",
   start_index: number,
   end_index: number
 }
-
 @Component({
   selector: 'app-root',
   standalone: true,
@@ -49,20 +48,19 @@ export class AppComponent implements AfterViewInit {
     {id : '6', display : "Joao da silva"}
   ]
 
-  showMatches = false;
-
   currentMatches : User[] = [];
-  selectedMatchIndex = 0;
+  SelectedMatchIndex = 0;
 
-  mentionsProcessed : Mention[] = [];
-  currentMention : Mention | undefined;
+  SuggestionIndex = 0;
+
+  mentions : Mention[] = [];
 
   @ViewChild('textarea') textarea: ElementRef<HTMLTextAreaElement> | undefined;
 
   constructor(private sanitizer: DomSanitizer, private changeDetectorRef: ChangeDetectorRef) {}
 
   ngAfterViewInit(): void {
-    let caret_pos_changing_events = ['keypress', 'mousedown', 'touchstart', 'input', 'paste', 'cut', 'mousemove', 'select', 'selectstart']
+    let caret_pos_changing_events = ['keypress', "keyup", 'mousedown', 'touchstart', 'input', 'paste', 'cut', 'mousemove', 'select', 'selectstart']
     console.log(this.textarea)
     for (const event of caret_pos_changing_events) {
       this.textarea?.nativeElement.addEventListener(event, () => {
@@ -72,7 +70,7 @@ export class AppComponent implements AfterViewInit {
   }
 
   getJson() : string {
-    return JSON.stringify(this.mentionsProcessed)
+    return JSON.stringify(this.mentions)
   }
 
   get message() {
@@ -83,12 +81,13 @@ export class AppComponent implements AfterViewInit {
   }
 
   get highlights() : SafeHtml {
-    let mentions = this.getMentionDictToHighlight(this.message)
+    // let mentions = this.getMentionDictToHighlight(this.message)
+    let mentions = this.getMentionCases(this.message)
 
     let html = '';
 
     for (const mention of mentions) {
-      if (mention.type === 'mention') {
+      if (mention.type === 'parser') {
         html += this.makeHilight(mention.text);
       } else {
         html += this.makeInvisible(mention.text);
@@ -98,28 +97,45 @@ export class AppComponent implements AfterViewInit {
     return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 
-  getMentionDictToHighlight(inputString: string): MentionCase[] {
-    return this.getAllMentionCases(inputString)
+  getMentionDictToHighlight(inputString: string): ParserCase[] {
+    return this.getAllSuggestionCases(inputString)
   }
 
-  getMentionDictFromNames(inputString: string, names : string[]): { text: string, type: string }[] {
-    const regex = new RegExp(names.map(name => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join("|"));
-    console.log("Regex for names: ", regex);
+  getMentionCases(str: string): ParserCase[] {
+    let result: ParserCase[] = [];
+  
+    let lastIndex = 0;
+    for (const obj of this.mentions) {
+      if (obj.str_start_index > lastIndex) {
+        result.push({text: str.substring(lastIndex, obj.str_start_index), type: "normal", start_index: lastIndex, end_index: obj.str_start_index});
+      }
+      result.push({text: str.substring(obj.str_start_index, obj.str_end_index + 1), type: "parser", start_index: obj.str_start_index, end_index: obj.str_end_index + 1});
+      lastIndex = obj.str_end_index + 1;
+    }
+  
+    if (lastIndex < str.length) {
+      result.push({text: str.substring(lastIndex), type: "normal", start_index: lastIndex, end_index: lastIndex + str.length});
+    }
 
-    return this._getMentionDict(inputString, regex);
+    
+    // result = result.sort((a, b) => a.start_index - b.start_index);
+    // console.log(result)
+    
+
+    return result;
   }
 
-  getAllMentionCases(inputString: string): MentionCase[] {
+  getAllSuggestionCases(inputString: string): ParserCase[] {
     const mentionRegex = /@\w+(?:\s\w+)*/g;
 
     return this._getMentionDict(inputString, mentionRegex);
   }
 
-  _getMentionDict(inputString: string, regex: RegExp): MentionCase[] {
+  _getMentionDict(inputString: string, regex: RegExp): ParserCase[] {
     const textParts = inputString.split(regex);
     const mentionParts = inputString.match(regex) || [];
   
-    const result: MentionCase[] = [];
+    const result: ParserCase[] = [];
 
     for (let i = 0; i < textParts.length; i++) {
       const textPart = textParts[i];
@@ -137,7 +153,7 @@ export class AppComponent implements AfterViewInit {
       if (mentionPart) {
         result.push({
           text: mentionPart,
-          type: "mention",
+          type: "parser",
           start_index: 0,
           end_index: 0,
         });
@@ -160,7 +176,7 @@ export class AppComponent implements AfterViewInit {
   }
 
   makeHilight(text : string) : string {
-    return '<strong style="font-weight: inherit; background-color: rgb(206, 228, 229);">' + text + '</strong>';
+    return '<strong style="font-weight: inherit; background-color: rgb(206, 128, 229);">' + text + '</strong>';
   }
 
   _getPossibleMatch(name: string) : User[] | undefined {
@@ -180,62 +196,43 @@ export class AppComponent implements AfterViewInit {
     return undefined
   }
 
-  getAllMentions() : MentionCase[] {
-    const mentions = this.getAllMentionCases(this.message).filter(mention => mention.type == "mention");
+  getAllSuggestion() : ParserCase[] {
+    const mentions = this.getAllSuggestionCases(this.message).filter(mention => mention.type == "parser");
 
     return mentions 
   }
 
-  getCurrentMention() : Mention | undefined {
-    const mentions = this.getAllMentionCases(this.message).filter(mention => mention.type == "mention");
+  getCurrentSuggestion() : ParserCase | undefined {
+    const suggestions = this.getAllSuggestionCases(this.message).filter(mention => mention.type == "parser");
 
-    let caret_position : number = this.textarea ? this.textarea.nativeElement.selectionStart : 0;
+    let caret_position : number = this._getCursorPos();
 
-    let mention_index = -1
-    let mentionFound : MentionCase | undefined = undefined
+    let suggestion_index = -1
+    let mention_found : ParserCase | undefined = undefined
 
-    mentions.forEach((mention, index) => {
-      console.log("Caret position: ", caret_position, "Start: ", mention.start_index, "End: ", mention.end_index)
-      if (caret_position > mention.start_index && caret_position <= mention.end_index) {
-        console.log("Setted index: ", index)
-        mention_index = index
-        mentionFound = mention
+    suggestions.forEach((mention, index) => {
+      if (caret_position >= mention.start_index && caret_position <= mention.end_index + 1) {
+        suggestion_index = index
+        mention_found = mention
       }
-    }) 
+    })
 
 
-    if (mention_index != -1 && mentionFound) {
-      if (this.mentionsProcessed[mention_index]) {
-        console.log("Rerturning saved", mention_index)
-        return this.mentionsProcessed[mention_index]
-      }
+    if (suggestion_index != -1 && mention_found) {
+      let current_parser_case = mention_found as ParserCase
+      this.SuggestionIndex = suggestion_index
 
-      let currentMention = mentionFound as MentionCase
-
-      let name = currentMention.text.substring(1).toLocaleLowerCase();
-
-      let possible_matches = this._getPossibleMatch(name);
-      let possible_match = possible_matches ? possible_matches[0] : undefined;
-
-      this.currentMatches = possible_matches || [];
-
-      let mention : Mention = {
-        text: currentMention.text,
-        user: possible_match,
-        index: mention_index,
-        str_start_index: currentMention.start_index,
-        str_end_index: currentMention.end_index,
-      }
-
-      return mention
+      return current_parser_case
     } 
 
     return undefined
   }
 
-
   onChangedMessage($event: string) {
+    let before_message = this.message
     this.message = $event;
+
+    this.updateMentions(before_message, this.message); 
     this._process();
   }
 
@@ -243,83 +240,90 @@ export class AppComponent implements AfterViewInit {
     this._process();
   }
 
-  _process(){
-    let mention = this.getCurrentMention();
-    console.log("Current mention: ", mention);
-    this.currentMention = mention;
+  updateMentions(before_message : string, now_message : string) {
+    const differences_change = diffChars(before_message, now_message);
 
-    let mentions = this.getAllMentions();
-
-    for (let i = 0; i < this.mentionsProcessed.length; i++) {
-      for (let j = 0; j < mentions.length; j++) {
-        if (this.mentionsProcessed[i].index == j) {
-          // console.log("Reprocessing index: ", this.mentionsProcessed[i].text, mentions[j].text);
-          this.mentionsProcessed[i].str_start_index = mentions[j].start_index;
-          this.mentionsProcessed[i].str_end_index = mentions[j].end_index;
-        }
-      }
-    }
-
-    if (this.currentMention) {
-      this.showMatches = true;
-    } else {
-      this.showMatches = false
-    }
-  }
-
-  onSelectEvent() {
-    if (!this.currentMention) return
-
-    console.log("Selecting: ", this.currentMention);
-
-    // if (this.currentMention.ended) return
-
-    if (this.currentMatches.length > 0) {
-      let found_user = this.currentMatches[this.selectedMatchIndex];
-      if (found_user){
-        this.currentMention.text = '@' + found_user.display
-        this.currentMention.str_end_index = this.currentMention.str_end_index + this.currentMention.text.length + 1
-        this.currentMention.user = found_user;
-      }
-    }
-
-    // this.currentMention.ended = true;
-
-    if (!this.mentionsProcessed[this.currentMention.index]) {
-      this.mentionsProcessed.push(this.currentMention);
-    } else {
-      this.mentionsProcessed[this.currentMention.index] = this.currentMention
-    }
-
-    if (this.currentMention.user) {
-      const start_index = this.currentMention.str_start_index + 1;
-      const end_index = this.currentMention.str_end_index;
-      const before = this.message.substring(0, start_index);
-      const after = this.message.substring(end_index, this.message.length);
-      this.message = before + this.currentMention.user.display + after;
-      this.changeDetectorRef.detectChanges();
-      this._setCursorPos(end_index);
+    
+    interface ChangeIndex extends Change {
+      index : number,
+      count : number
     }
     
-    this.selectedMatchIndex = 0;
+    let differences : ChangeIndex[] = []
+    let index = 0;
+
+    //Added index to each change
+    differences_change.forEach((diff : Change) => {
+      let count = diff.count ? diff.count : -9999
+
+      differences.push({index: index, count: count, ...diff})
+      if (diff.count){
+
+        index += diff.count;
+      } else {
+        console.log("Não teve contagem")
+      }
+
+    })
+
+    differences.forEach((diff : ChangeIndex) => {
+      if (diff.removed || diff.added) {   
+        this.mentions.map((mention) => {
+          console.log(mention.str_start_index, diff.index)
+          if (diff.index <= mention.str_start_index) {
+            if (diff.added) {
+              mention.str_start_index += diff.count
+              mention.str_end_index = mention.str_start_index + mention.text.length
+            } else if (diff.removed) {
+              mention.str_start_index -= diff.count
+              mention.str_end_index = mention.str_start_index + mention.text.length
+            }
+          } 
+        })
+      }
+
+    })
+
+    console.log(differences)
+  }
+
+  _process(){
+    let suggestion = this.getCurrentSuggestion();
+
+    if (suggestion) {
+
+      let name = suggestion.text.substring(1);
+      let matches = this._getPossibleMatch(name);
+
+      this.currentMatches = matches ? matches : [];
+
+      return
+    }
+
+    this.currentMatches = [];
+    this.SelectedMatchIndex = 0;
 
   }
 
-  onChooseEvent(indexTo: number) {
-
-    if (this.currentMatches.length == 0) return;
-
-    this.selectedMatchIndex += indexTo;
-    this.selectedMatchIndex = Math.max(0, Math.min(this.selectedMatchIndex, this.currentMatches.length - 1));
-
-    // this.mentionsProcessed[indexTo] = mention;
-  }
   _setCursorPos(index: number) {
     if (this.textarea) {
-      this.textarea.nativeElement.selectionStart = index;
-      this.textarea.nativeElement.selectionEnd = index;
+      setTimeout(() => {
+        if (this.textarea) {
+          console.log("Setting cursor: ", index);
+          this.textarea.nativeElement.selectionStart = index;
+          this.textarea.nativeElement.selectionEnd = index;
+        }
+      }, 100);
     }
   }
+
+  _getCursorPos() {
+   return this.textarea ? this.textarea.nativeElement.selectionStart : 0;
+  }
+
+  /*
+
+
 
   onRemoveEvent() {
     if (!this.currentMention) return
@@ -340,27 +344,87 @@ export class AppComponent implements AfterViewInit {
     // }
     
   }
+  */
+
+  onChooseEvent(indexTo: number) {
+    if (this.currentMatches.length == 0) return;
+
+    this.SelectedMatchIndex += indexTo;
+    this.SelectedMatchIndex = Math.max(0, Math.min(this.SelectedMatchIndex, this.currentMatches.length - 1));
+  }
+
+  onSelectEvent(event: KeyboardEvent) {
+    if (this.currentMatches.length == 0) return;
+
+    event.preventDefault();
+    this.processSelectedMention(this.currentMatches[this.SelectedMatchIndex]);
+  }
+
+  _insertMention(user: User, start_index: number, end_index: number) {
+    this.mentions.push({user, text: user.display, str_start_index: start_index, str_end_index: end_index});
+        
+    this.mentions = this.mentions.sort((a, b) => {
+      if (a.str_start_index > b.str_start_index) return 1;
+      if (a.str_start_index < b.str_start_index) return -1;
+      return 0;
+    })
+  }
+
+  processSelectedMention(user : User) {
+    let current_sugestion = this.getCurrentSuggestion();
+    if (current_sugestion) {
+        let start_index = current_sugestion.start_index;
+        let end_index = current_sugestion.end_index;
+
+        this._removeSelectionFromMessage(start_index, end_index);
+
+        this._insertIntoMessage(start_index, start_index, user.display);
+
+        let inserted_start_index = start_index
+        let inserted_end_index = start_index + user.display.length;
+
+        this._setCursorPos(inserted_end_index);
+
+        this._insertMention(user, inserted_start_index, inserted_end_index - 1);
+        
+    }
+  }
+
+  _removeSelectionFromMessage(start_index: number, end_index: number) {
+    let before = this.message.substring(0, start_index);
+    let after = this.message.substring(end_index, this.message.length);
+    this.onChangedMessage(before + after);
+    this.changeDetectorRef.detectChanges();
+  }
+
+  _insertIntoMessage(start_index: number, end_index: number, text: string) {
+    const before = this.message.substring(0, start_index);
+    const after = this.message.substring(end_index, this.message.length);
+
+    console.log("Inserido texto")
+    this.onChangedMessage(before + text+ after);
+
+    this.changeDetectorRef.detectChanges();
+  }
 
   onKeydown(event: KeyboardEvent) {
 
     this._process();
-
-    if (!this.currentMention) return;
     
-    //Selected the mention event
-    if (event.code == "Space") {
-      this.onSelectEvent();
-    }
-
     if (event.code == "ArrowUp" || event.code == "ArrowDown") {
       event.preventDefault();
       let indexTo = event.code == "ArrowUp" ? -1 : 1;
-
+  
       this.onChooseEvent(indexTo);
     }
 
-    if (event.code == "Backspace") {
-      this.onRemoveEvent();
+    if (event.code == "Space") {
+      this.onSelectEvent(event);
     }
+
+
+  //   if (event.code == "Backspace") {
+  //     this.onRemoveEvent();
+  //   }
   }
 }

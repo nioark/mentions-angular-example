@@ -63,6 +63,17 @@
     flex-direction: column;
 }
 
+.debug-div-2 {
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    translate: -50% 0;
+    height: 200px;
+    width: 650px;
+    display: flex;
+    flex-direction: column;
+}
+
 .matches {
     width: 394px;
     height: 100px;

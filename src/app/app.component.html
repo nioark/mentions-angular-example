@@ -1,10 +1,14 @@
 
 
 <div class="debug-div">
-  {{this.currentMention?.index}}
   
   {{getJson()}}
 </div>
+<div class="debug-div-2">
+  Current suggestion index: {{this.SuggestionIndex}}
+
+</div>  
+
 <div class="page">
   
   <div class="container">
@@ -15,7 +19,7 @@
       <ng-template
         cdkConnectedOverlay
         [cdkConnectedOverlayOrigin]="origin"
-        [cdkConnectedOverlayOpen]="showMatches"
+        [cdkConnectedOverlayOpen]="currentMatches.length > 0"
         [cdkConnectedOverlayPositions]="[
           {
               originX: 'center',
@@ -26,7 +30,7 @@
         ]">
         <div class="matches">
           <ng-container *ngFor="let user of currentMatches; index as i">
-            <div class="match" [ngClass]="{ 'selected': selectedMatchIndex === i }">
+            <div class="match" (click)="processSelectedMention(user)" [ngClass]="{ 'selected': SelectedMatchIndex === i }">
               {{user.display}}
             </div>
           </ng-container>
