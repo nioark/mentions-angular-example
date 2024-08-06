@@ -15,7 +15,6 @@ interface Mention {
   user: User | undefined,
   text: string,
   index: number,
-  ended: boolean,
   str_start_index: number,
   str_end_index: number
 }
@@ -46,7 +45,8 @@ export class AppComponent implements AfterViewInit {
     {id : '2', display : 'Jane'},
     {id : '3', display : 'Bob'},
     {id : '4', display : 'Joao'},
-    {id : '5', display : 'Jorge'}
+    {id : '5', display : 'Jorge'},
+    {id : '6', display : "Joao da silva"}
   ]
 
   showMatches = false;
@@ -180,6 +180,12 @@ export class AppComponent implements AfterViewInit {
     return undefined
   }
 
+  getAllMentions() : MentionCase[] {
+    const mentions = this.getAllMentionCases(this.message).filter(mention => mention.type == "mention");
+
+    return mentions 
+  }
+
   getCurrentMention() : Mention | undefined {
     const mentions = this.getAllMentionCases(this.message).filter(mention => mention.type == "mention");
 
@@ -189,16 +195,18 @@ export class AppComponent implements AfterViewInit {
     let mentionFound : MentionCase | undefined = undefined
 
     mentions.forEach((mention, index) => {
-      if (caret_position >= mention.start_index && caret_position <= mention.end_index + 1) {
+      console.log("Caret position: ", caret_position, "Start: ", mention.start_index, "End: ", mention.end_index)
+      if (caret_position > mention.start_index && caret_position <= mention.end_index) {
+        console.log("Setted index: ", index)
         mention_index = index
         mentionFound = mention
       }
     }) 
 
-    console.log(mentions)
 
     if (mention_index != -1 && mentionFound) {
       if (this.mentionsProcessed[mention_index]) {
+        console.log("Rerturning saved", mention_index)
         return this.mentionsProcessed[mention_index]
       }
 
@@ -217,7 +225,6 @@ export class AppComponent implements AfterViewInit {
         index: mention_index,
         str_start_index: currentMention.start_index,
         str_end_index: currentMention.end_index,
-        ended: false
       }
 
       return mention
@@ -238,9 +245,22 @@ export class AppComponent implements AfterViewInit {
 
   _process(){
     let mention = this.getCurrentMention();
+    console.log("Current mention: ", mention);
     this.currentMention = mention;
 
-    if (this.currentMention && !this.currentMention.ended) {
+    let mentions = this.getAllMentions();
+
+    for (let i = 0; i < this.mentionsProcessed.length; i++) {
+      for (let j = 0; j < mentions.length; j++) {
+        if (this.mentionsProcessed[i].index == j) {
+          // console.log("Reprocessing index: ", this.mentionsProcessed[i].text, mentions[j].text);
+          this.mentionsProcessed[i].str_start_index = mentions[j].start_index;
+          this.mentionsProcessed[i].str_end_index = mentions[j].end_index;
+        }
+      }
+    }
+
+    if (this.currentMention) {
       this.showMatches = true;
     } else {
       this.showMatches = false
@@ -250,7 +270,9 @@ export class AppComponent implements AfterViewInit {
   onSelectEvent() {
     if (!this.currentMention) return
 
-    if (this.currentMention.ended) return
+    console.log("Selecting: ", this.currentMention);
+
+    // if (this.currentMention.ended) return
 
     if (this.currentMatches.length > 0) {
       let found_user = this.currentMatches[this.selectedMatchIndex];
@@ -261,7 +283,7 @@ export class AppComponent implements AfterViewInit {
       }
     }
 
-    this.currentMention.ended = true;
+    // this.currentMention.ended = true;
 
     if (!this.mentionsProcessed[this.currentMention.index]) {
       this.mentionsProcessed.push(this.currentMention);
@@ -302,20 +324,20 @@ export class AppComponent implements AfterViewInit {
   onRemoveEvent() {
     if (!this.currentMention) return
 
-    console.log(this.currentMention)
+    console.log("Removing: ", this.currentMention);
 
     this.mentionsProcessed.splice(this.currentMention.index, 1);
     this.showMatches = false;
-    if (this.currentMention.user) {
-      const start_index = this.currentMention.str_start_index + 1;
-      const end_index = this.currentMention.str_end_index;
-      const before = this.message.substring(0, start_index);
-      const after = this.message.substring(end_index, this.message.length);
+    // if (this.currentMention.user && !this.currentMention.ended) {
+    //   const start_index = this.currentMention.str_start_index + 1;
+    //   const end_index = this.currentMention.str_end_index;
+    //   const before = this.message.substring(0, start_index);
+    //   const after = this.message.substring(end_index, this.message.length);
 
-      this._setCursorPos(start_index);
-      this.message = before + after;
-      this.changeDetectorRef.detectChanges();
-    }
+    //   this._setCursorPos(start_index);
+    //   this.message = before + after;
+    //   this.changeDetectorRef.detectChanges();
+    // }
     
   }
 
