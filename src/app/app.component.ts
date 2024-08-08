@@ -22,6 +22,7 @@ interface Mention {
 interface ParserCase {
   text: string,
   type: "normal" | "parser",
+  user?: User,
   start_index: number,
   end_index: number
 }
@@ -56,6 +57,9 @@ export class AppComponent implements AfterViewInit {
   mentions : Mention[] = [];
 
   @ViewChild('textarea') textarea: ElementRef<HTMLTextAreaElement> | undefined;
+  @ViewChild('highlight') highlight: ElementRef<HTMLDivElement> | undefined;
+
+  parsedMessage : SafeHtml = "";
 
   constructor(private sanitizer: DomSanitizer, private changeDetectorRef: ChangeDetectorRef) {}
 
@@ -65,8 +69,19 @@ export class AppComponent implements AfterViewInit {
     for (const event of caret_pos_changing_events) {
       this.textarea?.nativeElement.addEventListener(event, () => {
         this.onCaretChange();
+        this.handleScroll();
       })
     }
+  }
+
+  handleScroll() {
+    if (!this.textarea || !this.highlight) return;
+    
+    var scrollTop = this.textarea.nativeElement.scrollTop;
+    this.highlight.nativeElement.scrollTop = scrollTop;
+
+    var scrollLeft = this.textarea.nativeElement.scrollLeft;
+    this.highlight.nativeElement.scrollLeft = scrollLeft;
   }
 
   getJson() : string {
@@ -85,6 +100,7 @@ export class AppComponent implements AfterViewInit {
     let mentions = this.getMentionCases(this.message)
 
     let html = '';
+
 
     for (const mention of mentions) {
       if (mention.type === 'parser') {
@@ -109,7 +125,7 @@ export class AppComponent implements AfterViewInit {
       if (obj.str_start_index > lastIndex) {
         result.push({text: str.substring(lastIndex, obj.str_start_index), type: "normal", start_index: lastIndex, end_index: obj.str_start_index});
       }
-      result.push({text: str.substring(obj.str_start_index, obj.str_end_index + 1), type: "parser", start_index: obj.str_start_index, end_index: obj.str_end_index + 1});
+      result.push({text: str.substring(obj.str_start_index, obj.str_end_index + 1), type: "parser", user: obj.user, start_index: obj.str_start_index, end_index: obj.str_end_index + 1});
       lastIndex = obj.str_end_index + 1;
     }
   
@@ -176,7 +192,7 @@ export class AppComponent implements AfterViewInit {
   }
 
   makeHilight(text : string) : string {
-    return '<strong style="font-weight: inherit; background-color: rgb(206, 128, 229);">' + text + '</strong>';
+    return '<strong style="font-weight: inherit; background-color: rgb(206, 228, 229);">' + text + '</strong>';
   }
 
   _getPossibleMatch(name: string) : User[] | undefined {
@@ -228,12 +244,82 @@ export class AppComponent implements AfterViewInit {
     return undefined
   }
 
+  parseMessage(text : string) : SafeHtml {
+    const mentionRegex = /@\[\w+\]\([\w\s]+\)/g;
+
+    const textParts = text.split(mentionRegex);
+    const mentionParts = text.match(mentionRegex) || [];
+
+    const result: SafeHtml[] = [];
+
+    for (let i = 0; i < textParts.length; i++) {
+      const textPart = textParts[i];
+      const mentionPart = mentionParts[i];
+
+      if (textPart) {
+        result.push(this._makeText(textPart));
+      }
+
+      if (mentionPart) {
+        const regex = /@\[([^\]]+)\]\(([^\)]+)\)/;
+        const match = mentionPart.match(regex);
+
+        let user : User = {id: '', display: 'Unknown'};
+
+        if (match && match.length > 2) {
+          const id = match[1];
+          const name = match[2];
+
+          user = {id: id, display: name};
+        } 
+
+        result.push(this._makeMention(user));
+      }
+
+    }
+
+    let final_html = result.join('');
+
+    this.parsedMessage = this.sanitizer.bypassSecurityTrustHtml(final_html);
+
+    return this.sanitizer.bypassSecurityTrustHtml(final_html);
+  }
+
+  encodeMessage(text : string) : string {
+    console.log(text)
+    let parser_cases = this.getMentionCases(this.message)
+
+    let final_msg = ""
+
+    for (const parser_case of parser_cases) {
+      if (parser_case.type == "parser" && parser_case.user) {
+        final_msg += "@[" + parser_case.user?.id + "]" + "(" + parser_case.user?.display + ")"
+      } else {
+        final_msg += parser_case.text
+      }
+    }
+
+    return final_msg
+  }
+
+  _makeText(text : string) : string {
+    return '<span>' + text + '</span>'
+  }
+
+  _makeMention(user : User) : string {
+    return '<span style="font-weight: inherit; background-color: rgb(206, 228, 229);">' + '@' + user.display + '</span>'
+  }
+
   onChangedMessage($event: string) {
     let before_message = this.message
     this.message = $event;
 
     this.updateMentions(before_message, this.message); 
     this._process();
+
+    let encoded = this.encodeMessage(this.message);
+    console.log("Encoded: ", encoded)
+    this.parseMessage(encoded);
   }
 
   onCaretChange() {
@@ -246,6 +332,7 @@ export class AppComponent implements AfterViewInit {
     
     interface ChangeIndex extends Change {
       index : number,
+      end_index : number,
       count : number
     }
     
@@ -256,9 +343,8 @@ export class AppComponent implements AfterViewInit {
     differences_change.forEach((diff : Change) => {
       let count = diff.count ? diff.count : -9999
 
-      differences.push({index: index, count: count, ...diff})
+      differences.push({index: index, end_index: index + count, count: count, ...diff})
       if (diff.count){
-
         index += diff.count;
       } else {
         console.log("Não teve contagem")
@@ -268,23 +354,49 @@ export class AppComponent implements AfterViewInit {
 
     differences.forEach((diff : ChangeIndex) => {
       if (diff.removed || diff.added) {   
-        this.mentions.map((mention) => {
-          console.log(mention.str_start_index, diff.index)
-          if (diff.index <= mention.str_start_index) {
-            if (diff.added) {
+        let to_remove : Mention[] = []
+
+        for (const mention of this.mentions) {
+          
+          //Name cases for selection edit add in names
+          // console.log(mention.text,"mention_start_index: ", mention.str_start_index,  "mention_end_index: ", mention.str_end_index, "diff_index: ", diff.index, "diff_end_index: ", diff.end_index, diff)
+          if (mention.str_start_index >= diff.index && mention.str_end_index <= diff.end_index) {
+            console.log("Got edited", mention.text)
+            to_remove.push(mention)
+            continue;
+          }
+
+          // Handle single cases name edit
+          if (diff.index >= mention.str_start_index && diff.index <= mention.str_end_index && diff.removed) {
+            console.log("Removed for removed", mention.text)
+            this.mentions.splice(this.mentions.indexOf(mention), 1)
+            continue;
+          } else if (diff.index > mention.str_start_index && diff.index < mention.str_end_index && diff.added) {
+            console.log("Removed for added", mention.text)
+            this.mentions.splice(this.mentions.indexOf(mention), 1)
+            continue;
+          }
+          
+          //Handle cases for name moving
+          if (diff.index <= mention.str_start_index){
+            if (diff.added){
               mention.str_start_index += diff.count
-              mention.str_end_index = mention.str_start_index + mention.text.length
-            } else if (diff.removed) {
+              mention.str_end_index = mention.str_start_index + mention.text.length - 1
+            } else if (diff.removed){
               mention.str_start_index -= diff.count
-              mention.str_end_index = mention.str_start_index + mention.text.length
+              mention.str_end_index = mention.str_start_index + mention.text.length - 1
             }
-          } 
+          }
+
+        }
+
+        to_remove.forEach((mention) => {
+          this.mentions.splice(this.mentions.indexOf(mention), 1)
         })
+
       }
 
     })
-
-    console.log(differences)
   }
 
   _process(){
@@ -309,7 +421,6 @@ export class AppComponent implements AfterViewInit {
     if (this.textarea) {
       setTimeout(() => {
         if (this.textarea) {
-          console.log("Setting cursor: ", index);
           this.textarea.nativeElement.selectionStart = index;
           this.textarea.nativeElement.selectionEnd = index;
         }
@@ -321,10 +432,9 @@ export class AppComponent implements AfterViewInit {
    return this.textarea ? this.textarea.nativeElement.selectionStart : 0;
   }
 
+
+
   /*
-
-
-
   onRemoveEvent() {
     if (!this.currentMention) return
 
@@ -401,7 +511,6 @@ export class AppComponent implements AfterViewInit {
     const before = this.message.substring(0, start_index);
     const after = this.message.substring(end_index, this.message.length);
 
-    console.log("Inserido texto")
     this.onChangedMessage(before + text+ after);
 
     this.changeDetectorRef.detectChanges();

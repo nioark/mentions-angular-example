@@ -12,9 +12,12 @@
 }
 
 .highlight {
+    line-height: normal;
     position: relative;
     box-sizing: border-box;
     width: 100%; color: transparent;
+    height: 100%;
+
     overflow: hidden;
     white-space: pre-wrap;
     overflow-wrap: break-word;
@@ -24,6 +27,7 @@
 }
 
 .textarea {
+    line-height: normal;
     display: block;
     width: 100%;
     position: absolute;
@@ -37,7 +41,7 @@
     letter-spacing: inherit;
     height: 100%;
     bottom: 0px;
-    overflow: hidden;
+    overflow: auto;
     resize: none;
     padding: 9px;
     border: 1px solid silver;

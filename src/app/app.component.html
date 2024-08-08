@@ -4,8 +4,7 @@
   
   {{getJson()}}
 </div>
-<div class="debug-div-2">
-  Current suggestion index: {{this.SuggestionIndex}}
+<div class="debug-div-2" [innerHTML]="parsedMessage">
 
 </div>  
 
@@ -13,7 +12,7 @@
   
   <div class="container">
     <div class="form">
-      <div class="highlight" [innerHTML]="highlights">
+      <div #highlight class="highlight" [innerHTML]="highlights">
 
       </div>
       <ng-template
@@ -39,7 +38,7 @@
           </ng-container>
         </div>
       </ng-template>
-      <textarea #textarea cdkOverlayOrigin #origin="cdkOverlayOrigin" [ngModel]="message" (ngModelChange)="onChangedMessage($event)" (keydown)="onKeydown($event)"  class="textarea"></textarea>
+      <textarea #textarea cdkOverlayOrigin #origin="cdkOverlayOrigin" [ngModel]="message" (ngModelChange)="onChangedMessage($event)" (keydown)="onKeydown($event)" (scroll)="handleScroll()" class="textarea"></textarea>
     </div>
   </div>
 </div>
